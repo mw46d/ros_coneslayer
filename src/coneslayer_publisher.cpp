@@ -82,14 +82,17 @@ dai::Pipeline createPipeline(bool syncNN, std::string nnPath, std::string config
     xoutRgb->setStreamName("rgb");
     auto xoutNN = pipeline.create<dai::node::XLinkOut>();
     xoutNN->setStreamName("detections");
-    auto xoutDepth = pipeline.create<dai::node::XLinkOut>();
-    xoutDepth->setStreamName("depth");
+    // auto xoutDepth = pipeline.create<dai::node::XLinkOut>();
+    // xoutDepth->setStreamName("depth");
 
     // Properties
-    camRgb->setPreviewSize(1920, 1080);
+    // Lite !! camRgb->setPreviewSize(1920, 1080);
+    camRgb->setPreviewSize(1280, 800); // OAK-D-W
     // 1 camRgb->setPreviewSize(1280, 720);
     // 1 camRgb->setPreviewKeepAspectRatio(true);
-    camRgb->setResolution(dai::ColorCameraProperties::SensorResolution::THE_1080_P);
+    camRgb->setPreviewKeepAspectRatio(true); // OAK-D-W
+    // Lite !! camRgb->setResolution(dai::ColorCameraProperties::SensorResolution::THE_1080_P);
+    camRgb->setResolution(dai::ColorCameraProperties::SensorResolution::THE_800_P);
     camRgb->setInterleaved(false);
     camRgb->setColorOrder(dai::ColorCameraProperties::ColorOrder::BGR);
     camRgb->setFps(25);
@@ -97,9 +100,11 @@ dai::Pipeline createPipeline(bool syncNN, std::string nnPath, std::string config
     imageManip->initialConfig.setResizeThumbnail(416, 416);
     imageManip->initialConfig.setFrameType(dai::ImgFrame::Type::BGR888p);
 
-    monoLeft->setResolution(dai::MonoCameraProperties::SensorResolution::THE_400_P);
+    // Lite !! monoLeft->setResolution(dai::MonoCameraProperties::SensorResolution::THE_400_P);
+    monoLeft->setResolution(dai::MonoCameraProperties::SensorResolution::THE_800_P);
     monoLeft->setBoardSocket(dai::CameraBoardSocket::CAM_B);
-    monoRight->setResolution(dai::MonoCameraProperties::SensorResolution::THE_400_P);
+    // Lite !! monoRight->setResolution(dai::MonoCameraProperties::SensorResolution::THE_400_P);
+    monoRight->setResolution(dai::MonoCameraProperties::SensorResolution::THE_800_P);
     monoRight->setBoardSocket(dai::CameraBoardSocket::CAM_C);
 
     stereo->setDefaultProfilePreset(dai::node::StereoDepth::PresetMode::HIGH_ACCURACY);
@@ -139,11 +144,11 @@ dai::Pipeline createPipeline(bool syncNN, std::string nnPath, std::string config
     stereo->depth.link(spatialDetectionNetwork->inputDepth);
     if (syncNN) {
         spatialDetectionNetwork->passthrough.link(xoutRgb->input);
-        spatialDetectionNetwork->passthroughDepth.link(xoutDepth->input);
+        // spatialDetectionNetwork->passthroughDepth.link(xoutDepth->input);
     }
     else {
         imageManip->out.link(xoutRgb->input);
-        stereo->depth.link(xoutDepth->input);
+        // stereo->depth.link(xoutDepth->input);
     }
 
     spatialDetectionNetwork->out.link(xoutNN->input);
@@ -186,11 +191,12 @@ int main(int argc, char** argv) {
     std::string nnPath = resourceBaseFolder + "/" + nnName;
     std::string configPath = resourceBaseFolder + "/" + configName;
     dai::Pipeline pipeline = createPipeline(syncNN, nnPath, configPath);
-    dai::Device device(pipeline);
+    dai::Device device(pipeline, true);
+    // XXX USB3 is bad for GNSS dai::Device device(pipeline);
 
-    auto rgbQueue = device.getOutputQueue("rgb", 30, false);
-    auto detectionQueue = device.getOutputQueue("detections", 30, false);
-    auto depthQueue = device.getOutputQueue("depth", 30, false);
+    auto rgbQueue = device.getOutputQueue("rgb", 25, false);
+    auto detectionQueue = device.getOutputQueue("detections", 25, false);
+    // auto depthQueue = device.getOutputQueue("depth", 25, false);
     auto calibrationHandler = device.readCalibration();
 
     int width = 640, height = 480;
@@ -206,10 +212,9 @@ int main(int argc, char** argv) {
                                              // and image type is also same we can reuse it
                              std::placeholders::_1,
                              std::placeholders::_2),
-                   30,
+                   25,
                    rgbCameraInfo,
                    "color");
-
     dai::rosBridge::SpatialDetectionConverter detConverter(tfPrefix + "_rgb_camera_optical_frame", 416, 416, false);
     // dai::rosBridge::BridgePublisher<depthai_ros_msgs::msg::SpatialDetectionArray, dai::SpatialImgDetections> detectionPublish(
     dai::rosBridge::BridgePublisher<vision_msgs::msg::Detection3DArray, dai::SpatialImgDetections>
@@ -221,23 +226,23 @@ int main(int argc, char** argv) {
                              &detConverter,
 			     std::placeholders::_1,
 			     std::placeholders::_2),
-                   30);
+                   25);
 
-    dai::rosBridge::ImageConverter depthConverter(tfPrefix + "_right_camera_optical_frame", true);
-    auto rightCameraInfo = depthConverter.calibrationToCameraInfo(calibrationHandler, dai::CameraBoardSocket::CAM_C, width, height);
-    dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame>
-        depthPublish(depthQueue,
-                   node,
-                   std::string("stereo/depth"),
-                   std::bind(&dai::rosBridge::ImageConverter::toRosMsg,
-			     &depthConverter,
-			     std::placeholders::_1,
-			     std::placeholders::_2),
-                   30,
-                   rightCameraInfo,
-                   "stereo");
+    // dai::rosBridge::ImageConverter depthConverter(tfPrefix + "_right_camera_optical_frame", true);
+    // auto rightCameraInfo = depthConverter.calibrationToCameraInfo(calibrationHandler, dai::CameraBoardSocket::CAM_C, width, height);
+    // dai::rosBridge::BridgePublisher<sensor_msgs::msg::Image, dai::ImgFrame>
+    //     depthPublish(depthQueue,
+    //                node,
+    //                std::string("stereo/depth"),
+    //                std::bind(&dai::rosBridge::ImageConverter::toRosMsg,
+    //  		     &depthConverter,
+    //  		     std::placeholders::_1,
+    //  		     std::placeholders::_2),
+    //                25,
+    //                rightCameraInfo,
+    //                "stereo");
 
-    depthPublish.addPublisherCallback();
+    // depthPublish.addPublisherCallback();
     detectionPublish.addPublisherCallback();
     rgbPublish.addPublisherCallback();  // addPublisherCallback works only when the dataqueue is non blocking.
 

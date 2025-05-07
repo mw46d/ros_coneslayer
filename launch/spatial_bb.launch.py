@@ -14,9 +14,9 @@ def launch_setup(context, *args, **kwargs):
     package_prefix = get_package_share_directory("ros_coneslayer")
     
     return [
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(package_prefix, 'launch', 'coneslayer_publisher.launch.py'))),
+        # IncludeLaunchDescription(
+        #     PythonLaunchDescriptionSource(
+        #         os.path.join(package_prefix, 'launch', 'coneslayer_publisher.launch.py'))),
 
         ComposableNodeContainer(
             name=name + '_container',
